@@ -18,6 +18,7 @@ library(feasts)
 library(janitor)
 library(lubridate)
 library(broom)
+library(tsibble)
 
 ```
 
@@ -242,8 +243,8 @@ unique(energy_temp_df$year)
 # adding a column indicating if the policy was in affect or not
 energy_temp_df<- energy_temp_df |> 
   mutate(tou_policy = case_when(
-    (year > 2020) ~ "Yes",
-    (year < 2020) ~ "No"))
+    (year > 2020) ~ 1,
+    (year < 2020) ~ 0))
 unique(energy_temp_df$tou_policy)
 
 ```
@@ -252,33 +253,67 @@ unique(energy_temp_df$tou_policy)
 
 ```{r}
 
-tou_reg_all_hours <- lm(formula = daily_energy_mwh ~ hot_day, 
-   data = energy_temp_reg_df)
+tou_reg_all_hours <- lm(formula = hourly_energy_mwh ~ tou_policy +, 
+   data = energy_temp_df)
+
+summary(tou_reg_all_hours)
 
 ```
+
+## Looking at the peak hours only
+
+```{r}
+# data wrangling for the peak hours aggregated MWh
+tou_peak_hours_df <- energy_temp_df |> 
+  mutate(time = as_datetime(time, format = "%H:%M:%S")) |> 
+  mutate(time = lubridate::hour(time)) |> 
+  filter(time >= 16 & time <= 21) |> 
+  group_by(date) |> 
+  summarize(peak_energy_mwh = sum(hourly_energy_mwh))
+
+tou_policy <- energy_temp_df |> 
+  select(c("date", "tou_policy", "hot_day"))
+
+tou_peak_hours_df <- left_join(x = tou_peak_hours_df, 
+                               y = tou_policy, 
+                               by = "date")
+
+tou_reg_peak_hours <- lm(formula = peak_energy_mwh ~ tou_policy, 
+   data = tou_peak_hours_df)
+
+summary(tou_reg_peak_hours)
+
+```
+
 
 ### Looking at the decomposition
 
 ```{r}
 
-decom_df <- energy_temp_df |> 
+# preparing the dataframe for the time series 
+tou_reg_peak_hours <- energy_temp_df |> 
   mutate(time = as_datetime(time, format = "%H:%M:%S")) |> 
   mutate(time = lubridate::hour(time)) |> 
-  filter(time >= 16 & time <= 21)
+  filter(time >= 16 & time <= 21) |> 
+  group_by(date) |> 
+  summarize(daily_energy_mwh = sum(hourly_energy_mwh))
 
-class(decom_df$time)
-
-# turning 
-energy_temp_ts <- energy_temp_df |> 
+# turning the dataframe to a time series capable format
+decom_ts <- decom_df |> 
   as_tsibble() |> 
-  rename("date" = index,
-         "hourly_energy_mwh" = value)
+  na.omit() |> 
+  tsibble::fill_gaps()
+  
 
-decom <- mdeaths_plot |> 
-  model(classical_decomposition(Deaths, type = "additive")) |> 
+decom_ts |> 
+  autoplot(daily_energy_mwh)+
+  labs(title = "Time Series Plot of Daily Energy (MWh) during Peak TOU Times")
+
+decom <- decom_ts |> 
+  model(classical_decomposition(daily_energy_mwh, type = "additive")) |> 
   components() |> 
   autoplot() +
-  labs(title = "Classical additive decomposition of monthly male lung disease deaths in the UK (1974 and 1979)")
+  labs(title = "Classical additive decomposition of Cummulative Energy Usage from the times 4:00 p.m. and 9:00 p.m.")
 
 
 ```
