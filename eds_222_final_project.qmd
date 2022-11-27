@@ -72,15 +72,12 @@ temp_data <- temp_data |>
   mutate(date = lubridate::mdy(Date)) |> 
   select(!Date)
 
-class(eia_df$date)
-
-
 ```
 
-## Merging the Data
+## Merging the two datasets
 
 ```{r}
-# restructuring the eia data to merge the eia data and temperature data by date
+# restructuring the eia data to merge the dataset with the temperature data by date
 eia_data <- eia_df |> 
   mutate(time = (date)) |> 
   mutate(date = as.Date(date))
@@ -107,7 +104,7 @@ print(avg_min_temp)
 avg_avg_temp <- summary(energy_temp_df$temp_avg, na.rm = TRUE)
 print(avg_avg_temp)
 
-# wrangling the data to 
+# wrangling the data to run temperature regressions
 energy_temp_regression_df <- energy_temp_df |> 
   group_by(date) |> 
   summarize(daily_energy_mwh = sum(hourly_energy_mwh)) |> 
@@ -200,6 +197,7 @@ model_log_hot <- glm(hot_day~daily_energy_mwh,
                      family = 'binomial')
 summary(model_log_hot)
 
+# plotting the data
 ggplot(data = energy_temp_reg_log_df, 
        aes(y = hot_day,
            x = daily_energy_mwh)) + 
@@ -214,7 +212,6 @@ ggplot(data = energy_temp_reg_log_df,
   theme_minimal()
 
 ```
-
 
 ### Adding "Hot Day" Column to Hourly Dataframe
 
@@ -236,20 +233,51 @@ energy_temp_df <- energy_temp_df |>
 energy_temp_df$year <- format(energy_temp_df$year, format = "%Y")
 
 # filtering out the year 2020 from dataframe
-energy_temp_df <- energy_temp_df |> 
-  filter(year != 2020)
-unique(energy_temp_df$year)
+#energy_temp_df <- energy_temp_df |> 
+#  filter(year != 2020)
 
 # adding a column indicating if the policy was in affect or not
 energy_temp_df<- energy_temp_df |> 
   mutate(tou_policy = case_when(
     (year > 2020) ~ 1,
-    (year < 2020) ~ 0)) |> 
-  mutate(time = as_datetime(time, format = "%H:%M:%S")) |> 
-  mutate(time = lubridate::hour(time))
-unique(energy_temp_df$tou_policy)
+    (year <= 2020) ~ 0))
+unique(energy_temp_df$year)
+```
 
-class(energy_temp_df$time)
+## Plotting the data
+
+```{r}
+# plotting the MWh by hour
+ggplot(data = energy_temp_df, 
+       aes(y = hourly_energy_mwh,
+           x = time)) + 
+  geom_jitter(aes(color = tou_policy),
+              width = 0.05, height = 0,
+              alpha = 0.8) +
+  labs(x = "Hour", 
+       y = "Hourly Energy Demand (MWh)") +
+  geom_smooth(method = "glm", 
+              se=FALSE, 
+              size = 2, 
+              color = "#3f676e",
+              method.args = list(family = "binomial"))+
+  theme_minimal()
+
+# plotting the MWh by day
+ggplot(data = energy_temp_df, 
+       aes(y = hourly_energy_mwh,
+           x = time)) + 
+  geom_jitter(aes(color = tou_policy),
+              width = 0.05, height = 0,
+              alpha = 0.8) +
+  labs(x = "Time", 
+       y = "Hourly Energy Demand (MWh)") +
+  geom_smooth(method = "glm", 
+              se=FALSE, 
+              size = 2, 
+              color = "#3f676e",
+              method.args = list(family = "binomial"))+
+  theme_minimal()
 
 ```
 
@@ -284,6 +312,57 @@ summary(tou_reg_peak_hours)
 
 ```
 
+### Plotting Peak Hours Only
+
+```{r}
+# plotting by time
+ggplot(data = tou_peak_hours_df, 
+       aes(y = hourly_energy_mwh,
+           x = time)) + 
+  geom_jitter(aes(color = tou_policy),
+              width = 0.08, height = 0,
+              alpha = 0.8) +
+  labs(x = "TOU Peak Hours", 
+       y = "Hourly Energy Demand (MWh)") +
+  geom_smooth(method = "glm", 
+              se=FALSE, 
+              size = 2, 
+              color = "#3f676e",
+              method.args = list(family = "binomial"))+
+  theme_minimal()
+
+# plotting by max temperatures
+ggplot(data = tou_peak_hours_df, 
+       aes(temp_max, hourly_energy_mwh)) + 
+  geom_jitter(aes(color = tou_policy),
+              width = 0.08, height = 0,
+              alpha = 0.8) +
+  labs(x = "Maximum Temperatures", 
+       y = "Hourly Energy Demand (MWh)") +
+  geom_smooth(method = "glm", 
+              se=FALSE, 
+              size = 2, 
+              color = "#3f676e",
+              method.args = list(family = "binomial"))+
+  theme_minimal()
+
+# plotting by day
+ggplot(data = tou_peak_hours_df, 
+       aes(date, hourly_energy_mwh)) + 
+  geom_jitter(aes(color = tou_policy),
+              width = 0.08, height = 0,
+              alpha = 0.8) +
+  labs(x = "Day", 
+       y = "Hourly Energy Demand (MWh)") +
+  geom_smooth(method = "glm", 
+              se=FALSE, 
+              size = 2, 
+              color = "#3f676e",
+              method.args = list(family = "binomial"))+
+  theme_minimal()
+
+```
+
 ### Temp as continuous regressions
 
 ```{r}
@@ -307,20 +386,17 @@ summary(tou_reg_peak_temp)
 
 ```
 
-
 ```{r}
 
 
 
 ```
 
-
 ```{r}
 
 
 
 ```
-
 
 ### Looking at the decomposition
 
@@ -353,4 +429,3 @@ decom <- decom_ts |>
 
 
 ```
-
