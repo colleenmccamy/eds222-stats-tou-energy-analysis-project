@@ -222,8 +222,8 @@ ggplot(data = energy_temp_reg_log_df,
 
 energy_temp_df<- energy_temp_df |> 
   mutate(hot_day = case_when(
-    (temp_max >= 80) ~ "Yes",
-    (temp_max <= 79) ~ "No"))
+    (temp_max >= 80) ~ 1,
+    (temp_max <= 79) ~ 0))
 
 ```
 
@@ -244,44 +244,80 @@ unique(energy_temp_df$year)
 energy_temp_df<- energy_temp_df |> 
   mutate(tou_policy = case_when(
     (year > 2020) ~ 1,
-    (year < 2020) ~ 0))
+    (year < 2020) ~ 0)) |> 
+  mutate(time = as_datetime(time, format = "%H:%M:%S")) |> 
+  mutate(time = lubridate::hour(time))
 unique(energy_temp_df$tou_policy)
+
+class(energy_temp_df$time)
 
 ```
 
-### Running the first regression
+### Running the regression looking at all hours, TOU policy, temperature (as a binary factor), and any interaction with time and the TOU policy
 
 ```{r}
 
-tou_reg_all_hours <- lm(formula = hourly_energy_mwh ~ tou_policy +, 
-   data = energy_temp_df)
+tou_reg_all_hours <- lm(formula = hourly_energy_mwh ~ time + 
+                          time:tou_policy + 
+                          tou_policy +
+                          hot_day, 
+                        data = energy_temp_df)
 
 summary(tou_reg_all_hours)
 
 ```
 
-## Looking at the peak hours only
+## Looking at the peak hours only with the same regression equation above
 
 ```{r}
 # data wrangling for the peak hours aggregated MWh
 tou_peak_hours_df <- energy_temp_df |> 
-  mutate(time = as_datetime(time, format = "%H:%M:%S")) |> 
-  mutate(time = lubridate::hour(time)) |> 
-  filter(time >= 16 & time <= 21) |> 
-  group_by(date) |> 
-  summarize(peak_energy_mwh = sum(hourly_energy_mwh))
+  filter(time >= 16 & time <= 21)
 
-tou_policy <- energy_temp_df |> 
-  select(c("date", "tou_policy", "hot_day"))
-
-tou_peak_hours_df <- left_join(x = tou_peak_hours_df, 
-                               y = tou_policy, 
-                               by = "date")
-
-tou_reg_peak_hours <- lm(formula = peak_energy_mwh ~ tou_policy, 
-   data = tou_peak_hours_df)
+tou_reg_peak_hours <- lm(formula = hourly_energy_mwh ~ time + 
+                          time:tou_policy + 
+                          tou_policy +
+                          hot_day, 
+                         data = tou_peak_hours_df)
 
 summary(tou_reg_peak_hours)
+
+```
+
+### Temp as continuous regressions
+
+```{r}
+# all hours regression
+tou_reg_all_hours_temp <- lm(formula = hourly_energy_mwh ~ time + 
+                          time:tou_policy + 
+                          tou_policy +
+                          temp_max,
+                        data = energy_temp_df)
+
+summary(tou_reg_all_hours_temp)
+
+# peak hours regression
+tou_reg_peak_temp <- lm(formula = hourly_energy_mwh ~ time + 
+                          time:tou_policy + 
+                          tou_policy +
+                          temp_max, 
+                         data = tou_peak_hours_df)
+
+summary(tou_reg_peak_temp)
+
+```
+
+
+```{r}
+
+
+
+```
+
+
+```{r}
+
+
 
 ```
 
