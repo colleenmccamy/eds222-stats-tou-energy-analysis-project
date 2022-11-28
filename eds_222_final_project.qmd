@@ -241,7 +241,12 @@ energy_temp_df<- energy_temp_df |>
   mutate(tou_policy = case_when(
     (year > 2020) ~ 1,
     (year <= 2020) ~ 0))
-unique(energy_temp_df$year)
+
+
+# updating the time column
+energy_temp_df <- energy_temp_df |> 
+  mutate(time = as_datetime(time, format = "%H:%M:%S")) |> 
+  mutate(time = lubridate::hour(time))
 ```
 
 ## Plotting the data
@@ -266,11 +271,11 @@ ggplot(data = energy_temp_df,
 # plotting the MWh by day
 ggplot(data = energy_temp_df, 
        aes(y = hourly_energy_mwh,
-           x = time)) + 
+           x = date)) + 
   geom_jitter(aes(color = tou_policy),
               width = 0.05, height = 0,
               alpha = 0.8) +
-  labs(x = "Time", 
+  labs(x = "Day", 
        y = "Hourly Energy Demand (MWh)") +
   geom_smooth(method = "glm", 
               se=FALSE, 
@@ -386,46 +391,64 @@ summary(tou_reg_peak_temp)
 
 ```
 
-```{r}
-
-
-
-```
-
-```{r}
-
-
-
-```
-
 ### Looking at the decomposition
 
 ```{r}
 
 # preparing the dataframe for the time series 
-tou_reg_peak_hours <- energy_temp_df |> 
-  mutate(time = as_datetime(time, format = "%H:%M:%S")) |> 
-  mutate(time = lubridate::hour(time)) |> 
-  filter(time >= 16 & time <= 21) |> 
+decom_df <- tou_peak_hours_df |> 
   group_by(date) |> 
   summarize(daily_energy_mwh = sum(hourly_energy_mwh))
+
+decom_df$date <- format(decom_df$date, format = "%Y-%m")
+
+decom_df <- decom_df |> 
+  group_by(date) |> 
+  summarize(monthly_energy_mwh = mean(daily_energy_mwh))
+
+decom_df <- decom_df |> 
+  mutate(date = ym(date))
+
+class(decom_df$date)
+
+
+#### TEST
+
+as_tsibble(decom_df) %>%
+  model(STL(monthly_energy_mwh, 
+                                type = "additive")) %>%
+  components() %>%
+  autoplot() +
+  labs(title = "Classica")
 
 # turning the dataframe to a time series capable format
 decom_ts <- decom_df |> 
   as_tsibble() |> 
-  na.omit() |> 
-  tsibble::fill_gaps()
+  fill_gaps(.full = TRUE) |> 
+  na.omit()
   
-
+ # plotting the monthly peak amount
 decom_ts |> 
-  autoplot(daily_energy_mwh)+
+  autoplot(monthly_energy_mwh)+
   labs(title = "Time Series Plot of Daily Energy (MWh) during Peak TOU Times")
 
+class(decom_ts$date)
+class(decom_ts$monthly_energy_mwh)
+
 decom <- decom_ts |> 
-  model(classical_decomposition(daily_energy_mwh, type = "additive")) |> 
-  components() |> 
+  model(classical_decomposition(monthly_energy_mwh, type = "additive"))
+
+plot(decom)
   autoplot() +
   labs(title = "Classical additive decomposition of Cummulative Energy Usage from the times 4:00 p.m. and 9:00 p.m.")
 
-
+# # trying to plot the decomposition
+# decom_2 <- decompose(decom_ts) 
+# plot(decom_2)
+# 
+# #|> 
+#   #autoplot()
+# 
+# # seasonal adjustment for the decomposition
+# decom_no_season <- decompose(decom_ts) - decom_2$seasonal
 ```
