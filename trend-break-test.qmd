@@ -175,16 +175,40 @@ decom_df$date <- format(decom_df$date, format = "%Y-%m-%d")
 daily_energy <- decom_df$monthly_energy_mwh
 time_daily <- c(1:1461)
 
-# 
-daily_energy_ts <- ts(data = daily_energy, frequency = 365, start = c(2018, 7, 1), end = c(2022, 7, 1))
-daily_energy_ts
+# transforming the data into a timeseries
+daily_energy_ts <- ts(data = daily_energy, frequency = 365, 
+                      start = c(2018, 7, 1), end = c(2022, 7, 1))
 
 #### test 2
-daily_energy_bp <- breakpoints(daily_energy_ts ~ time_daily, breaks = 4)
+daily_energy_bp <- breakpoints(daily_energy_ts ~ time_daily)
+daily_energy_bp
+
+
+cusm_test_monthly <- efp(daily_energy_ts ~ breakfactor(daily_energy_bp),
+                         type = "OLS-CUSUM")
+plot(cusm_test_monthly)
+
+```
+
+```{r}
+
+tou_peak_hours_df
+
+# extracting daily energy and creating time variable
+peak_hourly_energy <- tou_peak_hours_df$hourly_energy_mwh
+time_hourly <- c(1:7301)
+
+# 
+peak_hourly_energy_ts <- ts(data = peak_hourly_energy, frequency = 1825, start = c(2018, 7, 1), end = c(2022, 7, 1))
+peak_hourly_energy_ts
+
+#### test 2
+daily_energy_bp <- breakpoints(peak_hourly_energy_ts ~ time_hourly)
 daily_energy_bp
 
 
 cusm_test_monthly <- efp(daily_energy_ts ~ breakfactor(daily_energy_bp), type = "OLS-CUSUM")
 plot(cusm_test_monthly)
+
 
 ```
