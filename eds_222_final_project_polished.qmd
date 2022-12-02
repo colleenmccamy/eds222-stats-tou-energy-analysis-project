@@ -1,0 +1,186 @@
+---
+title: "eds_222_final_project_polished"
+format: html
+editor: visual
+---
+
+## Libraries
+
+```{r}
+
+library(dplyr)
+library(tidyverse)
+library(here)
+library(readr)
+library(gt)
+library(tufte)
+library(feasts)
+library(janitor)
+library(lubridate)
+library(broom)
+library(tsibble)
+library(ggpubr)
+
+```
+
+## Loading in the Data
+
+```{r}
+# setting my root directory
+rootdir <- ("/Users/colleenmccamy/Documents/MEDS/EDS_222_Stats/final_project")
+
+# reading in the data
+eia_data_raw <- read_csv(paste0(rootdir, "/data/eia_data.csv"))
+
+# cleaning the data to be the two variables of interest
+eia_df <- eia_data_raw |> 
+  select(date, hourly_energy_mwh) |> 
+  na.omit()
+  
+# creating a time series dataframe
+eia_ts <- eia_df |> 
+  as_tsibble()
+
+
+```
+
+## Basic Visualization
+
+```{r}
+
+# exploring the data with a plot
+energy_demand_plot <- ggplot(data = eia_df,
+       aes(x = date, 
+           y = hourly_energy_mwh)) +
+  geom_line(col = "#b52b8c") +
+  labs(title = "Hourly Energy Demand (MWh)",
+       x = "Date",
+       y = "MWh") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+```
+
+## Adding Temperature Data
+
+Why temp data - explanation
+
+```{r}
+
+# loading in the temperature data
+temp_data <- read_csv(paste0(rootdir, "/data/sd_temp_data.csv"))
+
+# wrangling the data
+temp_data <- temp_data |> 
+  mutate(temp_max = as.numeric(temp_max)) |> 
+  mutate(temp_min = as.numeric(temp_min)) |> 
+  mutate(temp_avg = as.numeric(temp_avg)) |> 
+  mutate(temp_dept = as.numeric(temp_dept)) |> 
+  mutate(date = lubridate::mdy(Date)) |> 
+  select(!Date)
+
+```
+
+## Temperature Data Basic Visualization
+
+```{r}
+
+max_temp_plot <- ggplot(temp_data, aes(x = date, y = temp_max)) + 
+  geom_line(col = "#52796f") +
+  labs(title = "Maximum Temperature per day (F)",
+       x = "Date",
+       y = "Max Temperature (F)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+## Merging the Data
+
+```{r}
+
+# restructuring the eia data to merge the dataset with the temperature data by date
+eia_data <- eia_df |> 
+  mutate(time = (date)) |> 
+  mutate(date = as.Date(date))
+eia_data$time <- format(eia_data$time, format = "%H:%M:%S")
+
+# merging the data into one dataframe
+energy_temp_df <- left_join(x = eia_data,
+                            y = temp_data,
+                            by = "date")
+
+```
+
+## Grouping Data by Day
+
+```{r}
+
+tou_peak_hours_df <- energy_temp_df |> 
+  filter(time >= 16 & time <= 21)
+
+daily_peak_hrs_df <- tou_peak_hours_df |> 
+   group_by(date) |> 
+   summarize(daily_energy_mwh = sum(hourly_energy_mwh))
+
+```
+
+## Visualizing Daily Demand for Peak Hours
+
+```{r}
+
+peak_demand_plot <- ggplot(data = daily_peak_hrs_df,
+       aes(x = date, 
+           y = daily_energy_mwh)) +
+  geom_line(col = "#b52b8c") +
+  labs(title = "Hourly Energy Demand (MWh)",
+       x = "Date",
+       y = "MWh") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+peak_demand_plot
+
+# plotting along with daily temperature
+ggarrange(peak_demand_plot, max_temp_plot,
+                    ncol = 2, nrow = 1)
+```
+
+## Determining a "Hot Day"
+
+```{r}
+
+head(energy_temp_df)
+
+avg_max_temp <- summary(energy_temp_df$temp_max, na.rm = TRUE)
+print(avg_max_temp)
+
+temp_demand_daily <- energy_temp_df |> 
+  group_by(date) |> 
+  summarize(daily_energy_mwh = sum(hourly_energy_mwh)) |> 
+  left_join(temp_data, by = "date") |> 
+  mutate(hot_day = case_when(
+    (temp_max >= 80) ~ "Yes",
+    (temp_max <= 79) ~ "No"))
+
+```
+
+```{r}
+
+model_temp_demand <-lm(formula = daily_energy_mwh ~ temp_max, 
+                       data = temp_demand_daily)
+
+summary(model_temp_demand)
+
+ttest_temp_demand <- t.test(daily_energy_mwh ~ hot_day, 
+                            data = temp_demand_daily)
+ttest_temp_demand
+```
+
+## Box Plot Max Temp
+
+```{r}
+
+temp_boxplot <- ggboxplot()
+
+```
