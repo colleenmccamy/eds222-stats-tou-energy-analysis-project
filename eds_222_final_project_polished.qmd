@@ -20,6 +20,9 @@ library(lubridate)
 library(broom)
 library(tsibble)
 library(ggpubr)
+library(ggiraph)
+library(ggiraphExtra)
+library(sjPlot)
 
 ```
 
@@ -155,15 +158,40 @@ head(energy_temp_df)
 avg_max_temp <- summary(energy_temp_df$temp_max, na.rm = TRUE)
 print(avg_max_temp)
 
+mean_max_temp <- mean(energy_temp_df$temp_max, na.rm = TRUE)
+sd_max_temp <- sd(energy_temp_df$temp_max, na.rm = TRUE)
+
+print(mean_max_temp)
+print(sd_max_temp)
+
+# preparing the data to plot
+box_data <- as_tibble(energy_temp_df$temp_max)
+
+# plotting the data
+temp_box <- ggplot(box_data) +
+  geom_boxplot(aes(x = value)) +
+  labs(x = "Maximum Daily Temperature (F)") +
+  theme_minimal()
+
+temp_box
+
+```
+
+## Adding a 'Hot Day' Indicator in the Dataframe
+
+```{r}
+
 temp_demand_daily <- energy_temp_df |> 
   group_by(date) |> 
   summarize(daily_energy_mwh = sum(hourly_energy_mwh)) |> 
   left_join(temp_data, by = "date") |> 
   mutate(hot_day = case_when(
-    (temp_max >= 80) ~ "Yes",
-    (temp_max <= 79) ~ "No"))
+    (temp_max >= 80) ~ 1,
+    (temp_max <= 79) ~ 0))
 
 ```
+
+## Determining Temperature's Effect
 
 ```{r}
 
@@ -177,10 +205,120 @@ ttest_temp_demand <- t.test(daily_energy_mwh ~ hot_day,
 ttest_temp_demand
 ```
 
-## Box Plot Max Temp
+## Temperature's Effect on Energy Demand
 
 ```{r}
 
-temp_boxplot <- ggboxplot()
+model_hot_demand <- lm(formula = daily_energy_mwh ~ hot_day, 
+   data = energy_temp_df)
+summary(model_hot_demand)
+```
+
+## Adding TOU Policy and Peak Hours to Dataframe
+
+```{r}
+
+# adding a year separate year column in the dataframe
+energy_temp_df <- energy_temp_df |> 
+  mutate(year = date)
+
+energy_temp_df$year <- format(energy_temp_df$year, format = "%Y") 
+
+# adding binary variables
+energy_temp_df <- energy_temp_df |> 
+  mutate(tou_policy = case_when(
+    (year > 2020) ~ 1,
+    (year <= 2020) ~ 0)) |> 
+  mutate(time = as_datetime(time, format = "%H:%M:%S")) |> 
+  mutate(time = lubridate::hour(time)) |> 
+  mutate(tou_policy = case_when(
+    (year > 2020) ~ 1,
+    (year <= 2020) ~ 0)) |> 
+  mutate(peak_hours = case_when(
+    (time < 16) ~ 0,
+    (time >= 16 & time <= 21 ) ~ 1,
+    (time > 21) ~0)) |> 
+  mutate(hot_day = case_when(
+    (temp_max >= 80) ~ 1,
+    (temp_max <= 79) ~ 0))
+
+
+```
+
+## Correlation Plot
+
+```{r}
+library(ggcorrplot)
+
+head(energy_temp_df)
+
+energy_temp_cor_df <-energy_temp_df |> 
+  select(hourly_energy_mwh, peak_hours, tou_policy, hot_day)
+
+cor <- cor(energy_temp_cor_df, use = "complete.obs")
+
+ggcorrplot(cor)
+```
+
+## Linear Model
+
+```{r}
+
+model_tou_peak_demand <- lm(formula = hourly_energy_mwh ~ 
+                          peak_hours + 
+                          tou_policy +
+                          hot_day, 
+                        data = energy_temp_df)
+
+summary(model_tou_peak_demand)
+
+```
+
+## Plotting the Linear Regression
+
+```{r}
+
+ggPredict(model_tou_peak_demand, 
+          jitter = TRUE, 
+          interactive = TRUE)
+```
+
+## Conducting a t.test
+
+```{r}
+
+ttest <- t.test(hourly_energy_mwh ~ tou_policy, 
+       data = energy_temp_df)
+
+tab_model(ttest,
+          string.ci = c("Conf. Int (95%)"),
+          string.p = "P-value",
+          dv.labels = c("Energy Demand (MWh)"),
+          pred.labels = "TOU Policy",
+          title = "Welch Two Sample t-test")
+
+```
+
+```{r}
+
+x = seq(from = ymd('2018-07-1'), 
+        length.out = 1481,
+        by='day')
+x
+# preparing the dataframe for the time series
+decom_df <- energy_temp_df |>
+  group_by(date) |>
+  summarize(daily_energy_mwh = sum(hourly_energy_mwh)) |> 
+  mutate(index = x)
+
+decom_ts <- as_tsibble(decom_df, index = index)
+
+decom_plot <- model(decom_ts, 
+                    classical_decomposition(daily_energy_mwh ~ season(30), 
+                                            type = "additive")) |> 
+  components() |> 
+  autoplot()
+
+decom_plot
 
 ```

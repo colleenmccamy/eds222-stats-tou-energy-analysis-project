@@ -112,11 +112,11 @@ avg_max_nona <- energy_temp_df |>
   na.omit()
 sd(energy_temp_df$temp_max, na.rm = TRUE)
 
-avg_min_temp <- summary(energy_temp_df$temp_min, na.rm = TRUE)
-print(avg_min_temp)
-
-avg_avg_temp <- summary(energy_temp_df$temp_avg, na.rm = TRUE)
-print(avg_avg_temp)
+# avg_min_temp <- summary(energy_temp_df$temp_min, na.rm = TRUE)
+# print(avg_min_temp)
+# 
+# avg_avg_temp <- summary(energy_temp_df$temp_avg, na.rm = TRUE)
+# print(avg_avg_temp)
 
 # wrangling the data to run temperature regressions
 energy_temp_regression_df <- energy_temp_df |> 
@@ -127,22 +127,22 @@ energy_temp_regression_df <- energy_temp_df |>
 # running a regression on energy usage and max temperature
 temp_mod <-lm(formula = daily_energy_mwh ~ temp_max, data = energy_temp_regression_df) #%>% broom::tidy() %>% gt
 
-print(temp_mod)
-
-res <- resid(temp_mod)
-
-#produce residual vs. fitted plot
-plot(fitted(temp_mod), res)
+# print(temp_mod)
+# 
+# res <- resid(temp_mod)
+# 
+# #produce residual vs. fitted plot
+# plot(fitted(temp_mod), res)
 
 #add a horizontal line at 0 
-abline(0,0)
-
-############### ---------------------
-summary(temp_mod)
-
-temp_mod_log <- lm(formula = daily_energy_mwh ~ log(temp_max), data = energy_temp_regression_df)
-
-summary(temp_mod_log)
+# abline(0,0)
+# 
+# ############### ---------------------
+# summary(temp_mod)
+# 
+# temp_mod_log <- lm(formula = daily_energy_mwh ~ log(temp_max), data = energy_temp_regression_df)
+# 
+# summary(temp_mod_log)
 
 # plotting the data
 ggplot(data = energy_temp_regression_df, 
@@ -162,47 +162,47 @@ ggplot(data = energy_temp_regression_df,
   theme(plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(hjust = 0.5))
 
-# running a regression on energy usage and average temperature
-avg_model <- lm(formula = daily_energy_mwh ~ temp_avg, 
-   data = energy_temp_regression_df) #%>% broom::tidy() %>% gt
+# # running a regression on energy usage and average temperature
+# avg_model <- lm(formula = daily_energy_mwh ~ temp_avg, 
+#    data = energy_temp_regression_df) #%>% broom::tidy() %>% gt
+# 
+# summary(avg_model)
+# 
+# # plotting the data
+# ggplot(data = energy_temp_regression_df, 
+#        aes(y = daily_energy_mwh,
+#            x = temp_avg)) + 
+#   geom_point(color = "#be95c4") +
+#   labs(x = "Average Daily Temperature (F)", 
+#        y = "Total Energy Demand (MWh)", 
+#        title = "Average Daily Temperature with Total Energy Demand",
+#        subtitle = "With a linear regression model as the line") +
+#   geom_smooth(method = "lm", 
+#               formula = y~x, 
+#               se=FALSE, 
+#               size = 2, 
+#               color = "#6d597a")+
+#   theme_minimal() +
+#   theme(plot.title = element_text(hjust = 0.5),
+#   plot.subtitle = element_text(hjust = 0.5))
 
-summary(avg_model)
-
-# plotting the data
-ggplot(data = energy_temp_regression_df, 
-       aes(y = daily_energy_mwh,
-           x = temp_avg)) + 
-  geom_point(color = "#be95c4") +
-  labs(x = "Average Daily Temperature (F)", 
-       y = "Total Energy Demand (MWh)", 
-       title = "Average Daily Temperature with Total Energy Demand",
-       subtitle = "With a linear regression model as the line") +
-  geom_smooth(method = "lm", 
-              formula = y~x, 
-              se=FALSE, 
-              size = 2, 
-              color = "#6d597a")+
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5),
-  plot.subtitle = element_text(hjust = 0.5))
-
-# running a regression on energy usage and average temperature
-lm(formula = daily_energy_mwh ~ temp_min, 
-   data = energy_temp_regression_df) %>% broom::tidy() %>% gt
-
-# plotting the data
-ggplot(data = energy_temp_regression_df, 
-       aes(y = daily_energy_mwh,
-           x = temp_min)) + 
-  geom_point(color = "#75bfbf") +
-  labs(x = "Minimum Daily Temperature (F)", 
-       y = "Total Energy Demand (MWh)") +
-  geom_smooth(method = "lm", 
-              formula = y~x, 
-              se=FALSE, 
-              size = 2, 
-              color = "#3f676e")+
-  theme_minimal()
+# # running a regression on energy usage and average temperature
+# lm(formula = daily_energy_mwh ~ temp_min, 
+#    data = energy_temp_regression_df) %>% broom::tidy() %>% gt
+# 
+# # plotting the data
+# ggplot(data = energy_temp_regression_df, 
+#        aes(y = daily_energy_mwh,
+#            x = temp_min)) + 
+#   geom_point(color = "#75bfbf") +
+#   labs(x = "Minimum Daily Temperature (F)", 
+#        y = "Total Energy Demand (MWh)") +
+#   geom_smooth(method = "lm", 
+#               formula = y~x, 
+#               se=FALSE, 
+#               size = 2, 
+#               color = "#3f676e")+
+#   theme_minimal()
 
 # since they are all statistically significant given a 0.01 significance level, we can use maximum temperatures to be the variable for a "hot day"
 
@@ -210,8 +210,6 @@ energy_temp_reg_df <- energy_temp_regression_df |>
   mutate(hot_day = case_when(
     (temp_max >= 80) ~ "Yes",
     (temp_max <= 79) ~ "No"))
-
-unique(energy_temp_reg_df$hot_day)
 
 model_hot <- lm(formula = daily_energy_mwh ~ hot_day, 
    data = energy_temp_reg_df)
@@ -286,6 +284,7 @@ energy_temp_df<- energy_temp_df |>
 energy_temp_df <- energy_temp_df |> 
   mutate(time = as_datetime(time, format = "%H:%M:%S")) |> 
   mutate(time = lubridate::hour(time))
+
 ```
 
 ## Plotting the data
@@ -342,13 +341,13 @@ energy_temp_df <- energy_temp_df |>
   ))
 
 
-tou_reg_all_hours <- glm(formula = hourly_energy_mwh ~ peak_hours + 
+model_tou_peak <- glm(formula = hourly_energy_mwh ~ peak_hours + 
                           peak_hours:tou_policy + 
                           tou_policy +
                           hot_day, 
                         data = energy_temp_df)
 
-summary(tou_reg_all_hours)
+summary(model_tou_peak)
 
 ```
 
@@ -367,6 +366,12 @@ ggplot(data = energy_temp_df,
        y = "Hourly Energy Demand (MWh)") +
   theme_minimal()
 
+mod_interaction <- glm(formula = hourly_energy_mwh ~ peak_hours + 
+                          peak_hours:tou_policy + 
+                          tou_policy +
+                          hot_day, 
+                        data = energy_temp_df)
+
 
 ggplot(data = energy_temp_df, 
        aes(y = peak_hours,
@@ -384,7 +389,6 @@ ggplot(data = energy_temp_df,
   theme_minimal()
 
 ```
-
 
 ## Looking at the peak hours only with the same regression equation above
 
@@ -448,7 +452,6 @@ ggplot(data = energy_temp_df,
 #   theme_minimal()
 
 ```
-
 
 ### Looking at the decomposition
 
