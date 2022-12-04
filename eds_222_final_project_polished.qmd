@@ -8,6 +8,7 @@ editor: visual
 
 ```{r}
 
+#loading the necessary libraries
 library(dplyr)
 library(tidyverse)
 library(here)
@@ -23,10 +24,14 @@ library(ggpubr)
 library(ggiraph)
 library(ggiraphExtra)
 library(sjPlot)
+library(ggcorrplot)
+library(car)
+library(modelr)
+
 
 ```
 
-## Loading in the Data
+## Loading in the Data & Data Wrangling
 
 ```{r}
 # setting my root directory
@@ -44,30 +49,10 @@ eia_df <- eia_data_raw |>
 eia_ts <- eia_df |> 
   as_tsibble()
 
-
 ```
 
-## Basic Visualization
-
-```{r}
-
-# exploring the data with a plot
-energy_demand_plot <- ggplot(data = eia_df,
-       aes(x = date, 
-           y = hourly_energy_mwh)) +
-  geom_line(col = "#b52b8c") +
-  labs(title = "Hourly Energy Demand (MWh)",
-       x = "Date",
-       y = "MWh") +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5))
-
-
-```
 
 ## Adding Temperature Data
-
-Why temp data - explanation
 
 ```{r}
 
@@ -82,21 +67,6 @@ temp_data <- temp_data |>
   mutate(temp_dept = as.numeric(temp_dept)) |> 
   mutate(date = lubridate::mdy(Date)) |> 
   select(!Date)
-
-```
-
-## Temperature Data Basic Visualization
-
-```{r}
-
-max_temp_plot <- ggplot(temp_data, aes(x = date, y = temp_max)) + 
-  geom_line(col = "#52796f") +
-  labs(title = "Maximum Temperature per day (F)",
-       x = "Date",
-       y = "Max Temperature (F)") +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5))
-
 ```
 
 ## Merging the Data
@@ -120,19 +90,34 @@ energy_temp_df <- left_join(x = eia_data,
 
 ```{r}
 
+# creating dataframe for tou peak horus
 tou_peak_hours_df <- energy_temp_df |> 
   filter(time >= 16 & time <= 21)
 
+# grouping it for daily peak hours to plot with daily maximum temperature
 daily_peak_hrs_df <- tou_peak_hours_df |> 
    group_by(date) |> 
    summarize(daily_energy_mwh = sum(hourly_energy_mwh))
 
 ```
 
-## Visualizing Daily Demand for Peak Hours
+
+## Basic Visualization
 
 ```{r}
 
+# exploring the data by plotting energy demand throughout time
+energy_demand_plot <- ggplot(data = eia_df,
+       aes(x = date, 
+           y = hourly_energy_mwh)) +
+  geom_line(col = "#b52b8c") +
+  labs(title = "Hourly Energy Demand (MWh)",
+       x = "Date",
+       y = "MWh") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# plotting daily peak energy demand with daily max temperatures
 peak_demand_plot <- ggplot(data = daily_peak_hrs_df,
        aes(x = date, 
            y = daily_energy_mwh)) +
@@ -142,22 +127,52 @@ peak_demand_plot <- ggplot(data = daily_peak_hrs_df,
        y = "MWh") +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5))
-peak_demand_plot
+
+# exploring the data by plotting maximum temperature throughout time
+max_temp_plot <- ggplot(temp_data, aes(x = date, y = temp_max)) + 
+  geom_line(col = "#52796f") +
+  labs(title = "Maximum Temperature per day (°F)",
+       x = "Date",
+       y = "Max Temperature (°F)") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
 
 # plotting along with daily temperature
 ggarrange(peak_demand_plot, max_temp_plot,
                     ncol = 2, nrow = 1)
+
+```
+
+
+
+## Visualizing Daily Demand for Peak Hours
+
+```{r}
+
+# peak_demand_plot <- ggplot(data = daily_peak_hrs_df,
+#        aes(x = date, 
+#            y = daily_energy_mwh)) +
+#   geom_line(col = "#b52b8c") +
+#   labs(title = "Hourly Energy Demand (MWh)",
+#        x = "Date",
+#        y = "MWh") +
+#   theme_minimal() +
+#   theme(plot.title = element_text(hjust = 0.5))
+# peak_demand_plot
+# 
+# View(test)
+# # plotting along with daily temperature
+# ggarrange(peak_demand_plot, max_temp_plot,
+#                     ncol = 2, nrow = 1)
 ```
 
 ## Determining a "Hot Day"
 
 ```{r}
 
-head(energy_temp_df)
+### ---- Determining a "Hot Day" ---- 
 
-avg_max_temp <- summary(energy_temp_df$temp_max, na.rm = TRUE)
-print(avg_max_temp)
-
+# determining the mean and standard deviation for the time period of interest
 mean_max_temp <- mean(energy_temp_df$temp_max, na.rm = TRUE)
 sd_max_temp <- sd(energy_temp_df$temp_max, na.rm = TRUE)
 
@@ -167,10 +182,10 @@ print(sd_max_temp)
 # preparing the data to plot
 box_data <- as_tibble(energy_temp_df$temp_max)
 
-# plotting the data
+# plotting the mean and standard deviation
 temp_box <- ggplot(box_data) +
   geom_boxplot(aes(x = value)) +
-  labs(x = "Maximum Daily Temperature (F)") +
+  labs(x = "Maximum Daily Temperature (°F)") +
   theme_minimal()
 
 temp_box
@@ -194,24 +209,16 @@ temp_demand_daily <- energy_temp_df |>
 ## Determining Temperature's Effect
 
 ```{r}
-
-model_temp_demand <-lm(formula = daily_energy_mwh ~ temp_max, 
-                       data = temp_demand_daily)
-
-summary(model_temp_demand)
-
-ttest_temp_demand <- t.test(daily_energy_mwh ~ hot_day, 
-                            data = temp_demand_daily)
-ttest_temp_demand
-```
-
-## Temperature's Effect on Energy Demand
-
-```{r}
-
-model_hot_demand <- lm(formula = daily_energy_mwh ~ hot_day, 
-   data = energy_temp_df)
-summary(model_hot_demand)
+# 
+# # running a simple linear regression
+# model_hot_demand <- lm(formula = daily_energy_mwh ~ hot_day, 
+#    data = energy_temp_df)
+# summary(model_hot_demand)
+# 
+# # conducting a t-test
+# ttest_temp_demand <- t.test(daily_energy_mwh ~ hot_day, 
+#                             data = temp_demand_daily)
+# ttest_temp_demand
 ```
 
 ## Adding TOU Policy and Peak Hours to Dataframe
@@ -245,34 +252,46 @@ energy_temp_df <- energy_temp_df |>
 
 ```
 
-## Correlation Plot
-
-```{r}
-library(ggcorrplot)
-
-head(energy_temp_df)
-
-energy_temp_cor_df <-energy_temp_df |> 
-  select(hourly_energy_mwh, peak_hours, tou_policy, hot_day)
-
-cor <- cor(energy_temp_cor_df, use = "complete.obs")
-
-ggcorrplot(cor)
-```
 
 ## Linear Model
 
 ```{r}
-
+#### ----- Linear Regression on Hourly Energy Demand ---- ###
 model_tou_peak_demand <- lm(formula = hourly_energy_mwh ~ 
-                          peak_hours + 
-                          tou_policy +
-                          hot_day, 
-                        data = energy_temp_df)
+                              tou_policy + 
+                              peak_hours +
+                              hot_day, 
+                            data = energy_temp_df)
 
 summary(model_tou_peak_demand)
 
+# results
+tab_model(model_tou_peak_demand,
+          pred.labels = c("Intercept", 
+                          "TOU Policy In Effect", 
+                          "During Peak Hours", 
+                          "Max. Temp above 80 (°F)"),
+          dv.labels = c("Hourly Electricity Demand (MWh)"),
+          string.ci = "Conf. Int (95%)",
+          string.p = "P-value",
+          title = "Table 1. Linear Model Results for Predictors on Hourly Electricity Demand",
+          digits = 0)
+
 ```
+
+## Conducting a QQ Plot of residual for energy demand
+```{r}
+
+# creating residuals from the model
+aug <- energy_temp_df |>  
+  add_predictions(model_tou_peak_demand) |> 
+  mutate(residuals_energy = hourly_energy_mwh - pred)
+
+#plotting the residuals
+qqPlot(aug$residuals_energy) 
+
+```
+
 
 ## Plotting the Linear Regression
 
@@ -283,28 +302,43 @@ ggPredict(model_tou_peak_demand,
           interactive = TRUE)
 ```
 
-## Conducting a t.test
 
+## Linear Regression with Interation Added
 ```{r}
+# conducting the model
+model_int_tou_peak_demand <- lm(formula = hourly_energy_mwh ~ 
+                              tou_policy + 
+                              peak_hours +
+                              hot_day + 
+                              peak_hours * tou_policy,
+                            data = energy_temp_df)
+# getting the output of the model
+summary(model_int_tou_peak_demand)
 
-ttest <- t.test(hourly_energy_mwh ~ tou_policy, 
-       data = energy_temp_df)
-
-tab_model(ttest,
-          string.ci = c("Conf. Int (95%)"),
+# adding output to a table
+tab_model(model_int_tou_peak_demand,
+          pred.labels = c("Intercept", 
+                          "TOU Policy In Effect", 
+                          "During Peak Hours", 
+                          "Max. Temp above 80 (°F)",
+                          "TOU Policy & Peak Hours"),
+          dv.labels = c("Hourly Electricity Demand (MWh)"),
+          string.ci = "Conf. Int (95%)",
           string.p = "P-value",
-          dv.labels = c("Energy Demand (MWh)"),
-          pred.labels = "TOU Policy",
-          title = "Welch Two Sample t-test")
+          title = "Table 2. Linear Model Results for Predictors on Hourly Electricity Demand with an Interaction Addition",
+          digits = 2)
 
 ```
 
-```{r}
+
+## Classical Decomposition
+
+```{r,warning=FALSE, message=FALSE, results='hide'}
 
 x = seq(from = ymd('2018-07-1'), 
         length.out = 1481,
         by='day')
-x
+
 # preparing the dataframe for the time series
 decom_df <- energy_temp_df |>
   group_by(date) |>
@@ -313,12 +347,36 @@ decom_df <- energy_temp_df |>
 
 decom_ts <- as_tsibble(decom_df, index = index)
 
-decom_plot <- model(decom_ts, 
-                    classical_decomposition(daily_energy_mwh ~ season(30), 
+# conducting the classical decomposition and plotting it - season is 365 days
+decom_plot_annual <- model(decom_ts, 
+                    classical_decomposition(daily_energy_mwh ~ 
+                                              season(365), 
                                             type = "additive")) |> 
   components() |> 
-  autoplot()
+  autoplot(col = "#3d405b") +
+  theme_minimal() +
+  labs(title = "Classical Decomposition Model",
+       subtitle = "Seasonality defined as 365 days",
+       x = "Date",
+       caption = "Figure 4")
 
-decom_plot
+# conducting the classical decomposition and plotting it - season is 30 days 
+decom_plot_monthly <- model(decom_ts, 
+                    classical_decomposition(daily_energy_mwh ~ 
+                                              season(30), 
+                                            type = "additive")) |> 
+  components() |> 
+  autoplot(col = "#3d405b") +
+  theme_minimal() +
+  labs(title = "Classical Decomposition Model",
+       subtitle = "Seasonality defined as 30 days",
+       x = "Date",
+       caption = "Figure 3")
+
+# stacking the two plots
+ggarrange(decom_plot_monthly, decom_plot_annual,
+                    ncol = 1, nrow = 2)
 
 ```
+
+
