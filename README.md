@@ -4,7 +4,7 @@
 
 The purpose of this repository is to investigate the question, did the Time-of-Use electricity rate transition have an effect on energy demand in the greater San Diego region? 
 
-A full analysis and description is available at: [colleenmccamy.github.io/posts/2022-12-03-tou-policy-analysis] (https://colleenmccamy.github.io/posts/2022-12-03-tou-policy-analysis/)
+A full analysis and description is available at: [colleenmccamy.github.io/posts/2022-12-03-tou-policy-analysis](https://colleenmccamy.github.io/posts/2022-12-03-tou-policy-analysis/)
 
 # Libraries Used:
 - Dplyr
